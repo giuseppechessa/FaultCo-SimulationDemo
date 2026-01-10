@@ -1,0 +1,1 @@
+sudo docker run -it  -v ./SNNCode:/home/work/SNNCode/  --tmpfs /home/work/SNNCode/database:rw,size=100M  snncode bash

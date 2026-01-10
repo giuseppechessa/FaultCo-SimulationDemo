@@ -1,0 +1,11 @@
+IPython
+snntorch
+nir
+nirtorch
+pandas
+tqdm
+wandb
+matplotlib
+torchinfo
+scikit-learn
+
