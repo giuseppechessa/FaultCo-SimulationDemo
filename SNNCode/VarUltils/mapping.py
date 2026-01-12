@@ -202,3 +202,33 @@ class Mapping:
                         )
                         all_connections.append(conn)
         return all_connections
+    def GetNcmulticast(self,all_connections):
+        nc_multicasts: List[NeuronCoreMulticast] = []
+
+        for conn in all_connections:
+            nc_multicasts.append(
+                NeuronCoreMulticast(
+                    source_neuron=conn.source_neuron,
+                    source_core=conn.source_core,
+                    destination_cores=[
+                        dest.destination_core
+                        for dest in conn.destinations
+                    ]
+                )
+            )
+        # group the neuron-core multicasts by source_core
+        _grouped = defaultdict(set)  # use set to deduplicate
+        for m in nc_multicasts:
+            _grouped[m.source_core].update(m.destination_cores)
+
+        # build CoreCoreMulticast objects
+        cc_multicasts: List[CoreCoreMulticast] = [
+            CoreCoreMulticast(source_core=src, destination_cores=sorted(list(dests)))
+            for src, dests in _grouped.items()
+        ]
+
+        # print the Core–Core multicasts
+        for cc in cc_multicasts:
+            print(f"Core {cc.source_core}  ->  Cores {cc.destination_cores}")
+        return nc_multicasts
+

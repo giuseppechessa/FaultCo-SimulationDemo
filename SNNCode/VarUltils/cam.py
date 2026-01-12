@@ -16,10 +16,12 @@ class CAMEntry:
 class SimpleCAMGenerator:
     """Generate CAM tables"""
     
-    def __init__(self, neuron_lookup: Dict, all_connections: List):
+    def __init__(self, neuron_lookup: Dict, all_connections: List,db_path="./database/CAMTables.sql"):
         self.neuron_lookup = neuron_lookup
         self.all_connections = all_connections
-
+        self.camTables = self.display_cam_tables_with_filtering_stats()
+        self.DbPath = db_path
+        self.PATH=self.save_cam_tables_to_database(self.camTables,db_path)
     
     def generate_simple_cam_tables(self) -> Dict[int, Dict[int, List[int]]]:
         """
@@ -103,12 +105,13 @@ class SimpleCAMGenerator:
         
         return cam_tables
     
-    def save_cam_tables_to_database(self, cam_tables, db_path="./database/CAMTables.sql"):
+    def save_cam_tables_to_database(self, cam_tables, db_path):
         
         try:
             if os.path.exists(db_path):
                 os.remove(db_path)
-            
+            cam_tables=self.camTables
+            print(db_path)
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
@@ -144,6 +147,13 @@ class SimpleCAMGenerator:
             print(f"Total entries: {total_entries}")
             print(f"Total cores: {len(cam_tables)}")
             
+            if db_path:
+                print(f"CAM tables successfully saved to: {self.DbPath}")
+            else:
+                print("Failed to save CAM tables to database")
+
+
+
             return db_path
             
         except Exception as e:
