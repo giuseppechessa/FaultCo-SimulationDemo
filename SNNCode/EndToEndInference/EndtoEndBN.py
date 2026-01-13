@@ -3,9 +3,6 @@ import numpy as np
 import EndToEndInference.PackageGenerator as PG
 
 class EndToEndHardwareInference:
-    """
-    Make the single step inference process with the complete pipeline
-    """
 
     def __init__(self, network, neuron_lookup, mapping, all_connections,
                  dataSx_path="./database/DataSx.sql", 
@@ -28,12 +25,6 @@ class EndToEndHardwareInference:
         )
 
         nonzero_recurrent,nonzero_feedforward = self.package_generator.getNonzeroMatrix();
-
-        # # TODO: Can use PackageDecoder to decode more complex packages in the future
-        # self.package_decoder = PackageDecoder(
-        #     neuron_lookup=neuron_lookup,
-        #     all_connections=all_connections
-        # )
 
         self.state_corrector = PG.HardwareStateCorrector(
             network=network,
@@ -80,29 +71,7 @@ class EndToEndHardwareInference:
         }
 
     def single_step_with_same_time_correction(self, input_data, hardware_wait_time=0.1, keep_database=False, error_config=None, WrongSpikes=0, Missed = 0,OPTION=None):
-        """
-        Pipeline:
-        1. Execute lif1 inference to obtain spk1 and updated syn1
-        2. Actively call generate_packages(spk1) to generate packages
-        3. Receive packages returned by hardware
-        4. Calculate correction parameters and directly correct syn1 and cur2 for the current time step
-        5. Continue executing fc2 and lif2 to complete inference
 
-        Args:
-            input_data: (batch_size, input_size)
-            hardware_wait_time: delay time
-            keep_database: keep the database or not
-
-        Returns:
-            output: output spikes of the network
-            states: net states
-            correction_applied: whether correction is applied
-        """
-
-        # print(f"\\n=== Time Step {self.stats['total_steps']} === [Same-Step Correction + New PackageGenerator]")
-        # print(f"Database Model: {'cumulated' if keep_database else 'cleaned'}")
-
-        # Get the current network status
         current_states = self.get_network_states()
         x = input_data
         spk1 = current_states['spk1']
@@ -117,13 +86,7 @@ class EndToEndHardwareInference:
         cur2 = self.network.fc2(spk1)
 
         # Generate packages based on spk1
-        self.package_generator.generate_packages(spk1,'lif1')
-        # get the current package
-        transmitted_packages = self.package_generator.get_current_transmitted_packages()
-        self_communication_connections = self.package_generator.get_current_self_communication_connections()
-
-        self.stats['packages_sent'] += len(transmitted_packages)
-        total_self_comm = sum(len(connections) for connections in self_communication_connections.values())
+        self.stats['packages_sent'] +=self.package_generator.generate_packages(spk1,'lif1')
         correction_applied = False
         if(error_config!=None):
             ################################## hardware simulation###############################
@@ -148,7 +111,6 @@ class EndToEndHardwareInference:
             cur_sub, cur_add = self.state_corrector.generate_corrections_from_packages(
                 current_predictions, 
                 hardware_packages,
-                self_communication_connections
             )
             correction_count = (len(cur_sub) if cur_sub else 0) + (len(cur_add) if cur_add else 0)
         else:
@@ -165,7 +127,6 @@ class EndToEndHardwareInference:
                    recurrent_weights = self.lif1Matrix
                    syn,cur=syn1,cur2
                    alpha=1/self.network.lif1.alpha
-                   #print(alpha)
 
                if cur_sub:
                    start = self.mapping.StartingNeuronList[layer_name]
@@ -190,8 +151,6 @@ class EndToEndHardwareInference:
                    mask_syn = ~mask_cur
 
                    if np.any(mask_syn):
-                        print(updates[mask_syn])
-                        print(updates[mask_syn]*alpha)
                         syn[ :, rows[mask_syn]] -= updates[mask_syn]*alpha
 
                    if np.any(mask_cur):
@@ -234,12 +193,7 @@ class EndToEndHardwareInference:
         # Update network states
         self.update_network_states(spk1, syn1, mem1, mem2)
         self.package_generator.step(keep_database=keep_database)
-        self.stats['total_steps'] += 1
-
-        if correction_applied:
-            self.stats['correction_steps'] += 1
-        final_states = self.get_network_states()
-        return output, final_states, correction_applied,WrongSpikes,Missed
+        return output, correction_applied,WrongSpikes,Missed
 
 
 
@@ -259,7 +213,7 @@ class EndToEndHardwareInference:
 
             current_input = input_sequence[t].unsqueeze(0)
 
-            output, states, correction_applied,WrongSpikes,Missed = self.single_step_with_same_time_correction(
+            output, correction_applied,WrongSpikes,Missed = self.single_step_with_same_time_correction(
                 input_data=current_input,
                 hardware_wait_time=hardware_wait_time,
                 keep_database=keep_database,
@@ -292,7 +246,6 @@ class EndToEndHardwareInference:
             pipe_path = "./database/myfifo"+OPTION
             with open(pipe_path, "w") as pipe:
                 pipe.write("FINISHED")
-
         return torch.stack(outputs, dim=0), final_states, self.stats.copy(),WrongSpikes,Missed
 
     def reset_stats(self):

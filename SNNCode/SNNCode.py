@@ -47,14 +47,14 @@ nc_multicasts = mapping.GetNcmulticast(all_connections)
 
 # # Create dataset and dataloader
 val_set = torch.load('data/test_set_8.pt', weights_only=False)
-val_loader = torch.utils.data.DataLoader(val_set, batch_size=1, shuffle=True, num_workers=4, prefetch_factor=2)
+val_loader = torch.utils.data.DataLoader(val_set, batch_size=1, shuffle=False, num_workers=4, prefetch_factor=2)
 
 # ## Visialization Dataset
-print("One batch data shape:", next(iter(val_loader))[1].shape) # (B, T, imputs)
+print("One batch data shape:", next(iter(val_loader))[0].shape) # (B, T, imputs)
 print("One batch label shape:", next(iter(val_loader))[1].shape) # (B)
 
 
-VisualizeSpikes(val_loader)
+VisualizeSpikes(val_loader,"./Input_spikes")
 
 net_copy = copy.deepcopy(net).to(device)
 
@@ -80,7 +80,7 @@ for layer_name in spike_record:
     spike_record[layer_name] = torch.squeeze(torch.stack(spike_record[layer_name]))
 
 
-
+VisualizeSpikes(spike_record,"./Spike_record")
 # Count the number of spikes in each layer
 spike_counts = {layer_name: spikes.sum().item() for layer_name, spikes in spike_record.items()}
 # -------------------------------------------------

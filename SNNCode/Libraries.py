@@ -139,6 +139,24 @@ def build_ID_lookup(mapping) -> Dict[int,str]:
 
     return IdLookup
 
+def VisualizeSpikes(val_loader,Name):
+    # Visualize the data
+    for spk_data, target_data in val_loader:
+        data_visual = spk_data[0]
+        print(spk_data.size())
+
+        fig = plt.figure(facecolor="w", figsize=(10, 5))
+        ax = fig.add_subplot(111)
+        ax.set_yticks(np.arange(0, 40, 2)) 
+        snn.spikeplot.raster(data_visual, ax, s=5, c="blue")
+
+        plt.title("Input Sample")
+        plt.xlabel("Time step")
+        plt.ylabel("Neuron Number")
+        plt.savefig(Name)
+        #plt.show()
+        break  # Only display the first batch
+
 
 
 def regexp(expr, item):
@@ -147,15 +165,8 @@ def regexp(expr, item):
 
 @torch.no_grad()
 def evaluate(net,device,val_loader,mapping,all_connections,IdLookup,neuron_lookup,OPTION,numErrori):
-    net.eval()
-    net.to(device)
-    subprocess.Popen(["./SWITCH_SIM5V", "-D"])
-
-    total_correct, total_samples = 0, 0
-
-    all_predictions,all_labels,all_counts = [] ,[], []
-
-    # all_spikes = []
+    TotalAcc=[]
+    TotalWrongSpikes=[]
     if(OPTION!=None):
         conFaultPos = sqlite3.connect("./database/FaultInjPositions.sql")
         conFaultPos.create_function("REGEXP", 2, regexp)
@@ -167,28 +178,7 @@ def evaluate(net,device,val_loader,mapping,all_connections,IdLookup,neuron_looku
             sys.exit()
         new_dict = dict();
         SetError = -1;
-        new_dict[SetError]=1;
-        
-        con = sqlite3.connect("./FaultsFinal"+OPTION+".sql")
-        cur = con.cursor()
-        conFaultFinal = sqlite3.connect("./FaultsFinalSwitch.sql")
-        curFaultFinal = conFaultFinal.cursor()
-        #curFaultFinal.execute("CREATE TABLE Mousetrap(ID int,FaultPlace string, BitFault int,Polarity int,Sample int, PacketsDropped int, accuracy float,MISSED int)")
-        conFaultFinal.create_function("REGEXP", 2, regexp)
-        try:
-            res=curFaultFinal.execute("Select Distinct ID from Mousetrap")
-        except:
-            pass
-        AlreadyAnalized=res.fetchall();
-
-        for AlAn in AlreadyAnalized:
-            new_dict[AlAn[0]]=1;
-        try:
-            cur.execute("DROP TABLE Mousetrap; ")
-        except:
-            pass
-        cur.execute("CREATE TABLE Mousetrap(ID int,FaultPlace string, BitFault int,Polarity int,Sample int, PacketsDropped int, accuracy float,MISSED int)")
-        con.commit()
+        new_dict[SetError]=1
 
     for ErrorsNum in range(numErrori):
         if(OPTION!=None):
@@ -200,35 +190,47 @@ def evaluate(net,device,val_loader,mapping,all_connections,IdLookup,neuron_looku
             Polarity=ErrList[SetError][2]
             Bit=ErrList[SetError][3]
             new_dict[ErrNum]=1;
-            print(SetError," ",ErrNum," ",ID," ",Polarity," ",Bit)
+        else:
+            ErrNum=0
+            ID=None
+            Polarity=0
+            Bit=0
         i=0
+        
         with torch.no_grad():
-            pbar = tqdm(val_loader, desc="Evaluating")
-            for x, y in pbar:
+            #pbar = tqdm(val_loader, desc="Evaluating")
+            for x, y in val_loader:
+                i+=1
+                if(i<7):
+                    continue
                 if(OPTION==None):
                     error_config="NoneWithExtraSteps"
-                    OPTION=""
+                    SPACER=""
                     ErrNum=0
                 else:
                     error_config="Error"
+                    SPACER=OPTION
+
                 # Clean up old databases
-                for db_path in ["./database/DataSx"+OPTION+".sql", "./database/DataRx"+OPTION+".sql"]:
+                for db_path in ["./database/DataSx"+SPACER+".sql", "./database/DataRx"+SPACER+".sql"]:
                     if os.path.exists(db_path):
                         os.remove(db_path)
+
                 if error_config==None:
-                    boh=1;
+                    pass;
                 elif error_config == "NoneWithExtraSteps":
                     subprocess.Popen(["./SWITCH_SIM5V"])
                 else:
-                    subprocess.Popen(["./SWITCH_SIM5V", "-C",OPTION,str(ErrNum)])
+                    subprocess.Popen(["./SWITCH_SIM5V", "-C",SPACER,str(ErrNum)])
+
                 same_step_inference = EtE.EndToEndHardwareInference(
                     network=net,
                     neuron_lookup=neuron_lookup,
                     mapping=mapping,
                     all_connections=all_connections,
                     device=device,
-                    dataSx_path="./database/DataSx"+OPTION+".sql", 
-                    dataRx_path="./database/DataRx"+OPTION+".sql",
+                    dataSx_path="./database/DataSx"+SPACER+".sql", 
+                    dataRx_path="./database/DataRx"+SPACER+".sql",
                     IdLookup=IdLookup
                 )
 
@@ -244,63 +246,53 @@ def evaluate(net,device,val_loader,mapping,all_connections,IdLookup,neuron_looku
                     hardware_wait_time=0,
                     keep_database=False, 
                     error_config=error_config,
-                    OPTION=OPTION
+                    OPTION=SPACER
                 )
 
                 
                 predictions = spk_out.sum(dim=0).squeeze(0).argmax(dim=0)
                 CorrLabel = y.cpu().item();
+
                 if(predictions==CorrLabel):
                     ACC=1
                 else :
                     ACC = 0
-
-                if(OPTION!=""):
-                    Command = f"INSERT INTO Mousetrap VALUES({ErrNum},\'{ID}\',{Bit},{Polarity},{i},{WrongSpikes},{ACC},{Missed})"
-                    print(Command)
-                    cur.execute(Command)
-                    con.commit()
+                Command = f"INSERT INTO Mousetrap VALUES({ErrNum},\'{ID}\',{Bit},{Polarity},{0},{WrongSpikes},{ACC},{Missed})"
+                print(f"ERRID:{ErrNum}, at fault location:{ID}-{Bit}, with polarity:{Polarity}: WrongSpikes:{WrongSpikes}, Accuracy:{ACC}")
+                TotalAcc.append(ACC)
+                TotalWrongSpikes.append(WrongSpikes)
                 i=i+1
-                all_predictions.append(predictions.cpu().item())
-                all_counts.append(abs(spk_out.sum(dim=0).squeeze(0)[0] - spk_out.sum(dim=0).squeeze(0)[1]))
-                all_labels.append(y.cpu().item())
+                break
 
-                if len(all_predictions) > 0:
-                    current_acc = accuracy_score(all_labels, all_predictions)
-                    current_precision = precision_score(all_labels, all_predictions, average='macro', zero_division=0)
-                    current_recall = recall_score(all_labels, all_predictions, average='macro', zero_division=0)
-                    current_f1 = f1_score(all_labels, all_predictions, average='macro', zero_division=0)
-                    current_count =  statistics.fmean(all_counts, weights=None);
-
-                pbar.set_postfix({
-                    'Accuracy': f'{current_acc:.4f}',
-                    'Precision': f'{current_precision:.4f}',
-                    'Recall': f'{current_recall:.4f}',
-                    'F1_Score': f'{current_f1:.4f}',
-                    'DiffCount': f'{current_count:.4f}',
-                    'Samples': len(all_predictions)
-                })
 
             # Cleanup
             same_step_inference.cleanup()
+    if(OPTION!=None):
+        conFaultPos.close();
+    accmean=statistics.mean(TotalAcc)*100
+    wrongmean=(statistics.mean(TotalWrongSpikes)/890356)*100
+    print(accmean,wrongmean)
+    con = sqlite3.connect("./Mapping1FaultsInj.sql")
+    cur = con.cursor()
+    try:
+        cur.execute("CREATE TABLE FaultInjResults(FunctionalBlock string,PacketsDropped float, accuracy float)")
+        con.commit()
+    except:
+        pass
+    if(OPTION=="IPM[0-4].AckGen"):
+        OPTION="AckGenIn"
+    if(OPTION=="OPM[0-4].AckGen"):
+        OPTION="AckGenOut"
+    if(OPTION=="OPM[0-4].[^ToA][a-zA-Z][^t]"):
+        OPTION="OPM General Logic"
+    if(OPTION=="mutex"):
+        OPTION="Arbiter"
+    if(OPTION=="routeSelector"):
+        OPTION="Packet Route Selector"
+    if(OPTION=="reqGen"):
+        OPTION="Request Generator"
+    cur.execute(f"insert into FaultInjResults values(\"{OPTION}\",{wrongmean},{accmean})")
+    con.commit()
+    con.close();
 
-    conFaultPos.close();
 
-
-def VisualizeSpikes(val_loader):
-    # Visualize the data
-    for spk_data, target_data in val_loader:
-        data_visual = spk_data[0]
-        print(spk_data.size())
-
-        fig = plt.figure(facecolor="w", figsize=(10, 5))
-        ax = fig.add_subplot(111)
-        ax.set_yticks(np.arange(0, 40, 2)) 
-        snn.spikeplot.raster(data_visual, ax, s=5, c="blue")
-
-        plt.title("Input Sample")
-        plt.xlabel("Time step")
-        plt.ylabel("Neuron Number")
-        plt.savefig("./Spikes.pdf")
-        #plt.show()
-        break  # Only display the first batch
