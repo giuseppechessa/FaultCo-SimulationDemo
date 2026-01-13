@@ -164,6 +164,8 @@ class EndToEndHardwareInference:
                if(layer_name=='lif1'):
                    recurrent_weights = self.lif1Matrix
                    syn,cur=syn1,cur2
+                   alpha=1/self.network.lif1.alpha
+                   #print(alpha)
 
                if cur_sub:
                    start = self.mapping.StartingNeuronList[layer_name]
@@ -188,7 +190,9 @@ class EndToEndHardwareInference:
                    mask_syn = ~mask_cur
 
                    if np.any(mask_syn):
-                       syn[ :, rows[mask_syn]] -= updates[mask_syn]
+                        print(updates[mask_syn])
+                        print(updates[mask_syn]*alpha)
+                        syn[ :, rows[mask_syn]] -= updates[mask_syn]*alpha
 
                    if np.any(mask_cur):
                        cur[ :, rows[mask_cur] - size] -= updates[mask_cur]
@@ -215,7 +219,7 @@ class EndToEndHardwareInference:
                    mask_syn = ~mask_cur
 
                    if np.any(mask_syn):
-                       syn[ :, rows[mask_syn]] += updates[mask_syn]
+                       syn[ :, rows[mask_syn]] += updates[mask_syn]*alpha
 
                    if np.any(mask_cur):
                        cur[ :, rows[mask_cur] - size] += updates[mask_cur]
