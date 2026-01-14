@@ -270,7 +270,7 @@ def evaluate(net,device,val_loader,mapping,all_connections,IdLookup,neuron_looku
     if(OPTION!=None):
         conFaultPos.close();
     if(Name=="./Mapping2FaultsInj.sql"):
-        Tot=564616
+        Tot=890356
     else:
         Tot=890356
     accmean=statistics.mean(TotalAcc)*100

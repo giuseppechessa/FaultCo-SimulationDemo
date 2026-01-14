@@ -37,7 +37,7 @@ nir_model = gp.nir_model
 mapping = Mapping(net,nir_model)
 total_neurons = mapping.get_total_neurons()
 if(args.r==1):
-    core_capacity = 50
+    core_capacity = 25
 else:
     core_capacity = max(math.ceil((total_neurons - v.num_outputs) / (v.num_cores - 1)), v.num_outputs)
 

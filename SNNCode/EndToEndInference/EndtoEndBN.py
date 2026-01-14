@@ -246,7 +246,7 @@ class EndToEndHardwareInference:
             pipe_path = "./database/myfifo"+OPTION
             with open(pipe_path, "w") as pipe:
                 pipe.write("FINISHED")
-        #print(self.stats['packages_received'])
+            #print(self.stats['packages_received'])
         return torch.stack(outputs, dim=0), final_states, self.stats.copy(),WrongSpikes,Missed
 
     def reset_stats(self):
