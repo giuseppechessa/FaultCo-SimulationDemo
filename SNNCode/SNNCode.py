@@ -5,6 +5,7 @@ from Libraries import *
 parser = argparse.ArgumentParser()
 parser.add_argument("-num", required=True,help="Number of errors")
 parser.add_argument("-T", required=False,help="Target regexp")
+parser.add_argument("-r", required=False, action="store_true",help="use to process the second database")
 args = parser.parse_args()
 
 device = torch.device("cpu")
@@ -35,7 +36,11 @@ nir_model = gp.nir_model
 # Map neurons to cores
 mapping = Mapping(net,nir_model)
 total_neurons = mapping.get_total_neurons()
-core_capacity = max(math.ceil((total_neurons - v.num_outputs) / (v.num_cores - 1)), v.num_outputs)
+if(args.r==1):
+    core_capacity = 50
+else:
+    core_capacity = max(math.ceil((total_neurons - v.num_outputs) / (v.num_cores - 1)), v.num_outputs)
+
 mapping.set_core_capacity(core_capacity)
 mapping.map_neurons()
 
@@ -100,12 +105,14 @@ IdLookup=build_ID_lookup(mapping)
 # ## CAM Table
 # Generate Instance（use neuron_lookup abd all_connections to generate CAM）
 SimpleCAMGenerator(neuron_lookup, all_connections,"./database/CAMTables.sql")
-
-
+if(args.r==1):
+    Name="./Mapping2FaultsInj.sql"
+else:
+    Name="./Mapping1FaultsInj.sql"
 
 
 # test_acc = evaluate()
-evaluate(net_copy,device,val_loader,mapping,all_connections,IdLookup,neuron_lookup,args.T,int(args.num))
+evaluate(net_copy,device,val_loader,mapping,all_connections,IdLookup,neuron_lookup,args.T,int(args.num),Name)
 # print(f"Test accuracy: {test_acc:.4f}")
 
 

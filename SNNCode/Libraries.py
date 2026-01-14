@@ -164,7 +164,7 @@ def regexp(expr, item):
     return reg.search(item) is not None
 
 @torch.no_grad()
-def evaluate(net,device,val_loader,mapping,all_connections,IdLookup,neuron_lookup,OPTION,numErrori):
+def evaluate(net,device,val_loader,mapping,all_connections,IdLookup,neuron_lookup,OPTION,numErrori,Name):
     TotalAcc=[]
     TotalWrongSpikes=[]
     if(OPTION!=None):
@@ -269,28 +269,38 @@ def evaluate(net,device,val_loader,mapping,all_connections,IdLookup,neuron_looku
             same_step_inference.cleanup()
     if(OPTION!=None):
         conFaultPos.close();
+    if(Name=="./Mapping2FaultsInj.sql"):
+        Tot=564616
+    else:
+        Tot=890356
     accmean=statistics.mean(TotalAcc)*100
-    wrongmean=(statistics.mean(TotalWrongSpikes)/890356)*100
+    wrongmean=(statistics.mean(TotalWrongSpikes)/Tot)*100
     print(accmean,wrongmean)
-    con = sqlite3.connect("./Mapping1FaultsInj.sql")
+    con = sqlite3.connect(Name)
     cur = con.cursor()
     try:
         cur.execute("CREATE TABLE FaultInjResults(FunctionalBlock string,PacketsDropped float, accuracy float)")
         con.commit()
     except:
         pass
-    if(OPTION=="IPM[0-4].AckGen"):
+    if(OPTION=="IPM[0-4].AckGen" or OPTION=="Switch_0_[0-2].IPM[134].AckGen"):
         OPTION="AckGenIn"
-    if(OPTION=="OPM[0-4].AckGen"):
+    if(OPTION=="OPM[0-4].AckGen" or OPTION=="Switch_0_[0-2].OPM[134].AckGen"):
         OPTION="AckGenOut"
-    if(OPTION=="OPM[0-4].[^ToA][a-zA-Z][^t]"):
+    if(OPTION=="OPM[0-4].[^ToA][a-zA-Z][^t]" or OPTION=="Switch_0_[0-2].OPM[134].[^ToA][a-zA-Z][^t]"):
         OPTION="OPM General Logic"
-    if(OPTION=="mutex"):
+    if(OPTION=="mutex" or OPTION=="Switch_0_[0-2].OPM[134].mutex"):
         OPTION="Arbiter"
-    if(OPTION=="routeSelector"):
+    if(OPTION=="routeSelector" or OPTION=="Switch_0_[0-2].IPM[134].routeSelector"):
         OPTION="Packet Route Selector"
-    if(OPTION=="reqGen"):
+    if(OPTION=="reqGen" or OPTION=="Switch_0_[0-2].IPM[134].reqGen"):
         OPTION="Request Generator"
+    if(OPTION=="Switch_0_[0-2].IPM[134].inputMousetrap"):
+        OPTION="input Mousetrap"
+    if(OPTION=="Switch_0_[0-2].OPM[134].outputMousetrap"):
+        OPTION="output Mousetrap"
+    if(OPTION=="TailDetect" or OPTION=="Switch_0_[0-2].OPM[134]TailDetect"):
+        OPTION="Tail detector"
     cur.execute(f"insert into FaultInjResults values(\"{OPTION}\",{wrongmean},{accmean})")
     con.commit()
     con.close();
